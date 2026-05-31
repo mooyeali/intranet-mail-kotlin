@@ -12,7 +12,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.9.24</kotlin.version>
-        <ktor.version>2.3.12</ktor.version>
+        <ktor.version>2.3.13</ktor.version>
         <kotlinx.serialization.version>1.6.3</kotlinx.serialization.version>
         <kotlinx.html.version>0.11.0</kotlinx.html.version>
         <junit.version>5.10.2</junit.version>
@@ -20,6 +20,18 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <main.class>com.maoning.mail.MainKt</main.class>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>4.1.118.Final</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
