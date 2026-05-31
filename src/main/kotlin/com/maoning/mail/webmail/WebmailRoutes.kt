@@ -1,5 +1,6 @@
 package com.maoning.mail.webmail
 
+import com.maoning.mail.WebmailSession
 import com.maoning.mail.attachment.AttachmentStorage
 import com.maoning.mail.audit.AuditService
 import com.maoning.mail.auth.AuthService
@@ -20,11 +21,14 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.sessions.clear
+import io.ktor.server.sessions.get
+import io.ktor.server.sessions.sessions
+import io.ktor.server.sessions.set
 import kotlinx.html.*
 import java.security.SecureRandom
 import java.util.Base64
 
-private const val SESSION_COOKIE = "WEBMAIL_SESSION"
 private const val CSRF_COOKIE = "WEBMAIL_CSRF"
 
 fun Application.webmailRoutes(
@@ -60,7 +64,7 @@ fun Application.webmailRoutes(
             if (!call.validCsrf(params["csrf"].orEmpty())) return@post call.respondText("CSRF validation failed", status = HttpStatusCode.Forbidden)
             runCatching { authService.login(params["username"].orEmpty(), params["password"].orEmpty(), call.clientIp()) }
                 .onSuccess {
-                    call.response.cookies.append(webmailCookie(config, SESSION_COOKIE, it.token, httpOnly = true))
+                    call.sessions.set(WebmailSession(it.token))
                     call.ensureCsrfCookie(config, force = true)
                     call.respondRedirect("/webmail/inbox")
                 }
@@ -68,7 +72,7 @@ fun Application.webmailRoutes(
         }
 
         get("/webmail/logout") {
-            call.response.cookies.append(webmailCookie(config, SESSION_COOKIE, "", maxAge = 0, httpOnly = true))
+            call.sessions.clear<WebmailSession>()
             call.response.cookies.append(webmailCookie(config, CSRF_COOKIE, "", maxAge = 0, httpOnly = false))
             call.respondRedirect("/webmail/login")
         }
@@ -310,7 +314,7 @@ private fun FlowContent.csrfInput(value: String) {
 }
 
 private fun ApplicationCall.webmailSession(authService: AuthService) =
-    authService.authenticate("Bearer ${request.cookies[SESSION_COOKIE].orEmpty()}")
+    authService.authenticate("Bearer ${sessions.get<WebmailSession>()?.token.orEmpty()}")
 
 private fun ApplicationCall.ensureCsrfCookie(config: AppConfig, force: Boolean = false): String {
     val existing = request.cookies[CSRF_COOKIE]?.takeIf { it.isNotBlank() }

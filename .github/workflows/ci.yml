@@ -19,5 +19,5 @@ jobs:
         run: mvn -B verify
       - name: Build fat jar
         run: mvn -B package -DskipTests
-      - name: Build Docker image
-        run: docker build -t intranet-mail-kotlin:ci .
+      - name: Docker smoke test
+        run: ./scripts/docker-smoke-test.sh intranet-mail-kotlin:ci

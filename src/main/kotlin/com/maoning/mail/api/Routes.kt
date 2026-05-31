@@ -1,5 +1,6 @@
 package com.maoning.mail.api
 
+import com.maoning.mail.AdminSession
 import com.maoning.mail.attachment.AttachmentStorage
 import com.maoning.mail.audit.AuditService
 import com.maoning.mail.auth.AuthService
@@ -10,7 +11,6 @@ import com.maoning.mail.security.LoginRateLimiter
 import com.maoning.mail.store.MailStore
 import com.maoning.mail.store.QueueStatus
 import io.ktor.http.ContentType
-import io.ktor.http.Cookie
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -25,11 +25,13 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.sessions.clear
+import io.ktor.server.sessions.get
+import io.ktor.server.sessions.sessions
+import io.ktor.server.sessions.set
 import kotlinx.html.*
 import kotlinx.serialization.Serializable
 import org.mindrot.jbcrypt.BCrypt
-
-private const val ADMIN_SESSION_COOKIE = "ADMIN_SESSION"
 
 @Serializable data class RegisterRequest(val username: String, val password: String)
 @Serializable data class LoginRequest(val username: String, val password: String)
@@ -146,7 +148,7 @@ fun Application.mailRoutes(
             val password = params["password"].orEmpty()
             val ip = call.clientIp()
             if (username == config.adminUser && config.adminPasswordHash.isNotBlank() && BCrypt.checkpw(password, config.adminPasswordHash)) {
-                call.response.cookies.append(adminCookie(config, config.adminToken))
+                call.sessions.set(AdminSession(config.adminToken))
                 auditService.record(username, "ADMIN_LOGIN", ip = ip)
                 call.respondRedirect("/admin")
             } else {
@@ -156,7 +158,7 @@ fun Application.mailRoutes(
         }
 
         get("/admin/logout") {
-            call.response.cookies.append(adminCookie(config, "", maxAge = 0))
+            call.sessions.clear<AdminSession>()
             call.respondRedirect("/admin/login")
         }
 
@@ -212,19 +214,9 @@ private suspend fun ApplicationCall.adminOr401(config: AppConfig, block: suspend
 }
 
 private fun ApplicationCall.isAdmin(config: AppConfig): Boolean =
-    request.cookies[ADMIN_SESSION_COOKIE] == config.adminToken ||
+    sessions.get<AdminSession>()?.token == config.adminToken ||
         request.headers["X-Admin-Token"] == config.adminToken ||
         (config.adminQueryTokenEnabled && request.queryParameters["token"] == config.adminToken)
-
-private fun adminCookie(config: AppConfig, value: String, maxAge: Int = 24 * 3600): Cookie = Cookie(
-    name = ADMIN_SESSION_COOKIE,
-    value = value,
-    path = "/admin",
-    maxAge = maxAge,
-    httpOnly = true,
-    secure = config.secureCookies,
-    extensions = mapOf("SameSite" to "Lax")
-)
 
 private fun ApplicationCall.clientIp(): String = request.headers["X-Forwarded-For"]?.substringBefore(',')?.trim()
     ?: request.local.remoteHost

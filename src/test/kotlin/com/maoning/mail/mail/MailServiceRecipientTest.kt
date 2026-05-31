@@ -4,6 +4,7 @@ import com.maoning.mail.attachment.AttachmentStorage
 import com.maoning.mail.audit.AuditService
 import com.maoning.mail.auth.AuthService
 import com.maoning.mail.config.AppConfig
+import com.maoning.mail.db.DataSourceFactory
 import com.maoning.mail.db.H2MailStore
 import com.maoning.mail.mime.MimeParser
 import java.nio.file.Files
@@ -21,9 +22,10 @@ class MailServiceRecipientTest {
             attachmentDir = workDir.resolve("attachments").toString(),
             adminToken = "test-admin-token"
         )
-        val store = H2MailStore(config.domain, config.h2Url, config.h2User, config.h2Password)
+        val dataSource = DataSourceFactory.hikari(config.h2Url, config.h2User, config.h2Password)
+        val store = H2MailStore(config.domain, dataSource)
         val auth = AuthService(store)
-        val audit = AuditService(config.h2Url, config.h2User, config.h2Password)
+        val audit = AuditService(dataSource)
         val mail = MailService(store, MimeParser(AttachmentStorage(config.attachmentDir)), audit)
 
         auth.register("alice", "alicePass123")

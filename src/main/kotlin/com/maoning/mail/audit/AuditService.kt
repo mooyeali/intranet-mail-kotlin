@@ -1,12 +1,12 @@
 package com.maoning.mail.audit
 
 import java.sql.Connection
-import java.sql.DriverManager
+import javax.sql.DataSource
 import java.time.Instant
 import java.util.UUID
 
-class AuditService(private val url: String, private val user: String, private val password: String) {
-    private fun conn(): Connection = DriverManager.getConnection(url, user, password)
+class AuditService(private val dataSource: DataSource) {
+    private fun conn(): Connection = dataSource.connection
 
     fun record(actor: String?, action: String, target: String? = null, detail: String? = null, ip: String? = null) {
         conn().use { c ->

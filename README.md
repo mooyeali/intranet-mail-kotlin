@@ -195,6 +195,12 @@ docker run --rm -p 8080:8080 -p 2525:2525 \
   intranet-mail-kotlin
 ```
 
+Docker smoke test:
+
+```bash
+./scripts/docker-smoke-test.sh intranet-mail-kotlin:smoke
+```
+
 ## systemd
 
 示例服务文件在 `deploy/intranet-mail.service`。部署流程：

@@ -4,30 +4,27 @@ import com.maoning.mail.store.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.sql.Connection
-import java.sql.DriverManager
 import org.flywaydb.core.Flyway
+import javax.sql.DataSource
 import java.time.Instant
 import java.util.UUID
 
 class H2MailStore(
     override val domain: String,
-    private val url: String,
-    private val user: String,
-    private val password: String
+    private val dataSource: DataSource
 ) : MailStore {
     private val json = Json { ignoreUnknownKeys = true }
 
     init {
-        Class.forName("org.h2.Driver")
         Flyway.configure()
-            .dataSource(url, user, password)
+            .dataSource(dataSource)
             .locations("classpath:db/migration")
             .baselineOnMigrate(true)
             .load()
             .migrate()
     }
 
-    private fun conn(): Connection = DriverManager.getConnection(url, user, password)
+    private fun conn(): Connection = dataSource.connection
 
     override fun normalizeMailbox(input: String): String {
         val trimmed = input.trim().lowercase()

@@ -29,6 +29,7 @@ class SmtpServer(
 ) {
     private val logger = LoggerFactory.getLogger(SmtpServer::class.java)
     private val running = AtomicBoolean(false)
+    @Volatile private var serverSocket: ServerSocket? = null
     private val pool = Executors.newFixedThreadPool(config.smtpMaxConnections + 1)
     private val sslContext: SSLContext? = createSslContext()
 
@@ -36,6 +37,7 @@ class SmtpServer(
         if (!running.compareAndSet(false, true)) return
         pool.submit {
             ServerSocket().use { server ->
+                serverSocket = server
                 server.reuseAddress = true
                 server.bind(InetSocketAddress(config.smtpHost, config.smtpPort), config.smtpMaxConnections)
                 logger.info("SMTP server listening on {}:{}", config.smtpHost, config.smtpPort)
@@ -50,6 +52,7 @@ class SmtpServer(
 
     fun stop() {
         running.set(false)
+        runCatching { serverSocket?.close() }
         pool.shutdownNow()
     }
 

@@ -2,17 +2,15 @@ package com.maoning.mail.security
 
 import com.maoning.mail.config.AppConfig
 import java.sql.Connection
-import java.sql.DriverManager
+import javax.sql.DataSource
 import java.time.Instant
 import java.util.UUID
 
 class LoginRateLimiter(
     private val config: AppConfig,
-    private val url: String,
-    private val user: String,
-    private val password: String
+    private val dataSource: DataSource
 ) {
-    private fun conn(): Connection = DriverManager.getConnection(url, user, password)
+    private fun conn(): Connection = dataSource.connection
 
     fun assertAllowed(username: String, ip: String) {
         val since = Instant.now().minusSeconds(config.loginWindowSeconds).toEpochMilli()

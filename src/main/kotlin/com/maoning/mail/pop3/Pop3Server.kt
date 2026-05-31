@@ -22,12 +22,14 @@ class Pop3Server(
 ) {
     private val logger = LoggerFactory.getLogger(Pop3Server::class.java)
     private val running = AtomicBoolean(false)
+    @Volatile private var serverSocket: ServerSocket? = null
     private val pool = Executors.newFixedThreadPool(config.pop3MaxConnections + 1)
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
         pool.submit {
             ServerSocket().use { server ->
+                serverSocket = server
                 server.reuseAddress = true
                 server.bind(InetSocketAddress(config.pop3Host, config.pop3Port), config.pop3MaxConnections)
                 logger.info("POP3 server listening on {}:{}", config.pop3Host, config.pop3Port)
@@ -42,6 +44,7 @@ class Pop3Server(
 
     fun stop() {
         running.set(false)
+        runCatching { serverSocket?.close() }
         pool.shutdownNow()
     }
 
