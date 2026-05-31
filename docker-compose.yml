@@ -1,0 +1,36 @@
+services:
+  intranet-mail:
+    build: .
+    image: intranet-mail-kotlin:latest
+    container_name: intranet-mail
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "2525:2525"
+      - "1110:1110"
+    environment:
+      MAIL_DOMAIN: corp.local
+      HTTP_PORT: "8080"
+      SMTP_PORT: "2525"
+      POP3_PORT: "1110"
+      H2_URL: jdbc:h2:/opt/intranet-mail/data/intranet-mail;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+      ATTACHMENT_DIR: /opt/intranet-mail/data/attachments
+      ADMIN_USER: admin
+      ADMIN_TOKEN: change-me
+      ADMIN_PASSWORD_HASH: ""
+      ADMIN_QUERY_TOKEN_ENABLED: "false"
+      SECURE_COOKIES: "false"
+      SMTP_MAX_CONNECTIONS: "50"
+      POP3_MAX_CONNECTIONS: "50"
+      SOCKET_TIMEOUT_MILLIS: "30000"
+      MAX_MESSAGE_BYTES: "10485760"
+      MAX_ATTACHMENT_BYTES: "10485760"
+      MAX_TOTAL_ATTACHMENT_BYTES: "20971520"
+      MAX_QUEUE_ATTEMPTS: "5"
+      LOGIN_MAX_FAILURES: "5"
+      LOGIN_WINDOW_SECONDS: "300"
+    volumes:
+      - intranet-mail-data:/opt/intranet-mail/data
+
+volumes:
+  intranet-mail-data:

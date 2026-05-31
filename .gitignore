@@ -1,0 +1,21 @@
+# Build outputs
+target/
+build/
+out/
+
+# Runtime data
+data/
+*.db
+*.mv.db
+*.trace.db
+
+# Local secrets / TLS materials
+.env
+*.p12
+*.jks
+*.keystore
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
