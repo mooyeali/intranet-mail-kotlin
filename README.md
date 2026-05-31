@@ -18,7 +18,7 @@ Kotlin/Ktor 实现的内网邮件服务，已包含用户、邮件、会话持�
 
 ## 构建说明
 
-项目以 Maven 为唯一构建入口；旧 Gradle 配置已移除，避免依赖版本漂移。当前 Maven 配置保持 JVM 8 字节码兼容，Docker 运行时仍使用 JRE 17。
+项目以 Maven 为唯一构建入口；已移除 Gradle 相关配置，避免依赖版本漂移。当前 Maven 配置保持 JVM 8 字节码兼容，Docker 运行时仍使用 JRE 17。
 
 ## 启动
 
@@ -295,7 +295,6 @@ docker compose up -d --build
 
 GitHub Actions 配置在 `.github/workflows/ci.yml`，包含：
 
-- `./gradlew test`
 - `mvn -B package -DskipTests`
 - Docker image build
 
@@ -311,31 +310,6 @@ GitHub Actions 配置在 `.github/workflows/ci.yml`，包含：
 - 搜索：`/webmail/search`
 
 说明：当前 Webmail 使用 query token 维持最小可用会话，生产建议替换为 HttpOnly Cookie + CSRF Token。
-
-## Gradle Wrapper
-
-项目包含标准 wrapper 配置：
-
-```text
-gradle/wrapper/gradle-wrapper.properties
-```
-
-当前 `gradlew` 会优先使用官方 `gradle-wrapper.jar`；如果 jar 不存在，会回退到系统 `gradle` 或自动下载 Gradle 8.8，并校验 zip 完整性，避免半包导致后续构建异常。
-
-如果网络环境下载 Gradle 慢，可在能联网的机器执行：
-
-```bash
-gradle wrapper --gradle-version 8.8
-```
-
-然后提交生成的：
-
-```text
-gradle/wrapper/gradle-wrapper.jar
-gradle/wrapper/gradle-wrapper.properties
-gradlew
-gradlew.bat
-```
 
 ## IMAP 说明
 
@@ -380,7 +354,7 @@ src/main/resources/db/migration/V3__mailbox_flags.sql
 
 ## Maven 构建
 
-项目已增加 Maven 构建配置 `pom.xml`，当前推荐使用 Maven，避免 Gradle 分发包下载卡住：
+项目已增加 Maven 构建配置 `pom.xml`，当前推荐使用 Maven：
 
 ```bash
 mvn -B test
