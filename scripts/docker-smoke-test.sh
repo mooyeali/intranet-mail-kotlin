@@ -23,6 +23,7 @@ docker run -d --name "$NAME" \
   -p "${SMTP_PORT}:2525" \
   -p "${POP3_PORT}:1110" \
   -e ADMIN_TOKEN="smoke-admin-token" \
+  -e ADMIN_SESSION_SECRET="smoke-admin-session-secret-32-chars" \
   -e MAIL_DOMAIN="smoke.local" \
   "$IMAGE" >/dev/null
 

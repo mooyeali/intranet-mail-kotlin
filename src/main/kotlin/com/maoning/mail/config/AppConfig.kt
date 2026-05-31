@@ -14,6 +14,7 @@ data class AppConfig(
     val adminUser: String = env("ADMIN_USER", "admin"),
     val adminPasswordHash: String = env("ADMIN_PASSWORD_HASH", ""),
     val adminToken: String = env("ADMIN_TOKEN", "change-me"),
+    val adminSessionSecret: String = env("ADMIN_SESSION_SECRET", "change-me"),
     val adminQueryTokenEnabled: Boolean = env("ADMIN_QUERY_TOKEN_ENABLED", "false").toBooleanStrictOrNull() ?: false,
     val secureCookies: Boolean = env("SECURE_COOKIES", "false").toBooleanStrictOrNull() ?: false,
     val maxQueueAttempts: Int = env("MAX_QUEUE_ATTEMPTS", "5").toInt(),
@@ -38,6 +39,9 @@ data class AppConfig(
         require(socketTimeoutMillis > 0) { "SOCKET_TIMEOUT_MILLIS must be positive" }
         require(adminPasswordHash.isNotBlank() || adminToken != "change-me") {
             "Configure ADMIN_PASSWORD_HASH or replace the default ADMIN_TOKEN before starting"
+        }
+        require(adminSessionSecret != "change-me" && adminSessionSecret.length >= 32) {
+            "Configure ADMIN_SESSION_SECRET with at least 32 characters before starting"
         }
     }
 }

@@ -39,12 +39,21 @@ H2_URL=jdbc:h2:./data/intranet-mail;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
 H2_USER=sa
 H2_PASSWORD=
 ADMIN_TOKEN=change-me
+ADMIN_SESSION_SECRET=change-me
 MAX_QUEUE_ATTEMPTS=5
 ATTACHMENT_DIR=./data/attachments
 LOGIN_MAX_FAILURES=5
 LOGIN_WINDOW_SECONDS=300
 ADMIN_USER=admin
 ADMIN_PASSWORD_HASH=
+ADMIN_QUERY_TOKEN_ENABLED=false
+SECURE_COOKIES=false
+SMTP_MAX_CONNECTIONS=50
+POP3_MAX_CONNECTIONS=50
+SOCKET_TIMEOUT_MILLIS=30000
+MAX_MESSAGE_BYTES=10485760
+MAX_ATTACHMENT_BYTES=10485760
+MAX_TOTAL_ATTACHMENT_BYTES=20971520
 ```
 
 生产/内网建议显式配置：
@@ -52,6 +61,7 @@ ADMIN_PASSWORD_HASH=
 ```bash
 MAIL_DOMAIN=corp.local \
 ADMIN_TOKEN='replace-with-long-random-token' \
+ADMIN_SESSION_SECRET='replace-with-at-least-32-characters-secret' \
 SMTP_PORT=25 \
 HTTP_PORT=8080 \
 mvn -B package && java -jar target/intranet-mail-kotlin-0.1.0.jar
@@ -115,7 +125,9 @@ curl -s -X POST http://127.0.0.1:8080/api/mail/send \
 队列 worker 会异步投递；也可以手动触发：
 
 ```bash
-curl -X POST 'http://127.0.0.1:8080/admin/api/queue/drain?token=change-me'
+curl -X POST \
+  -H 'X-Admin-Token: replace-with-long-random-token' \
+  'http://127.0.0.1:8080/admin/api/queue/drain'
 ```
 
 ## SMTP AUTH 示例
@@ -164,10 +176,10 @@ http://127.0.0.1:8080/admin/login
 接口：
 
 ```bash
-curl -H 'X-Admin-Token: ***' 'http://127.0.0.1:8080/admin/api/users'
-curl -H 'X-Admin-Token: ***' 'http://127.0.0.1:8080/admin/api/messages'
-curl -H 'X-Admin-Token: ***' 'http://127.0.0.1:8080/admin/api/queue'
-curl -H 'X-Admin-Token: ***' 'http://127.0.0.1:8080/admin/api/dead'
+curl -H 'X-Admin-Token: replace-with-long-random-token' 'http://127.0.0.1:8080/admin/api/users'
+curl -H 'X-Admin-Token: replace-with-long-random-token' 'http://127.0.0.1:8080/admin/api/messages'
+curl -H 'X-Admin-Token: replace-with-long-random-token' 'http://127.0.0.1:8080/admin/api/queue'
+curl -H 'X-Admin-Token: replace-with-long-random-token' 'http://127.0.0.1:8080/admin/api/dead'
 ```
 
 ## 内网 DNS / MX 配置
@@ -191,6 +203,7 @@ docker build -t intranet-mail-kotlin .
 docker run --rm -p 8080:8080 -p 2525:2525 \
   -e MAIL_DOMAIN=corp.local \
   -e ADMIN_TOKEN=replace-with-long-random-token \
+  -e ADMIN_SESSION_SECRET=replace-with-at-least-32-characters-secret \
   -v intranet-mail-data:/opt/intranet-mail/data \
   intranet-mail-kotlin
 ```
@@ -227,6 +240,7 @@ sudo systemctl enable --now intranet-mail
 - 附件已落盘，生产可替换为对象存储
 - SMTP 只允许认证用户以自己的邮箱发信
 - 管理 API 默认不接受 URL query token；如需兼容旧脚本可显式设置 `ADMIN_QUERY_TOKEN_ENABLED=true`
+- 管理后台 Cookie Session 使用 `ADMIN_SESSION_SECRET` 进行 HMAC 签名；生产环境必须配置 32 字符以上随机值
 - SMTP/POP3 已限制连接线程、socket timeout、邮件大小和附件大小
 
 ## POP3 收信
@@ -309,7 +323,7 @@ GitHub Actions 配置在 `.github/workflows/ci.yml`，包含：
 - 写邮件：`/webmail/compose`
 - 搜索：`/webmail/search`
 
-说明：当前 Webmail 使用 query token 维持最小可用会话，生产建议替换为 HttpOnly Cookie + CSRF Token。
+说明：当前 Webmail 使用 Ktor Cookie Session + CSRF Token；生产环境建议启用 HTTPS 并设置 `SECURE_COOKIES=true`。
 
 ## IMAP 说明
 

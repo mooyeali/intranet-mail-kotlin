@@ -21,6 +21,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.sessions.Sessions
+import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
 import io.ktor.server.sessions.cookie
 import kotlinx.serialization.json.Json
 
@@ -63,6 +64,7 @@ fun main() {
                 cookie.httpOnly = true
                 cookie.secure = config.secureCookies
                 cookie.extensions["SameSite"] = "Lax"
+                transform(SessionTransportTransformerMessageAuthentication(config.adminSessionSecret.toByteArray(Charsets.UTF_8)))
             }
             cookie<WebmailSession>("WEBMAIL_SESSION") {
                 cookie.path = "/webmail"

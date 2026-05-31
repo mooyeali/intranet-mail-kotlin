@@ -35,6 +35,7 @@ class SmtpPop3SocketIT {
             pop3Host = "127.0.0.1",
             pop3Port = freePort(),
             adminToken = "test-admin-token",
+            adminSessionSecret = "valid-admin-session-secret-32-chars",
             socketTimeoutMillis = 5_000,
             maxMessageBytes = 4096
         )

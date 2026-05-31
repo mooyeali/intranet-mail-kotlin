@@ -148,7 +148,7 @@ fun Application.mailRoutes(
             val password = params["password"].orEmpty()
             val ip = call.clientIp()
             if (username == config.adminUser && config.adminPasswordHash.isNotBlank() && BCrypt.checkpw(password, config.adminPasswordHash)) {
-                call.sessions.set(AdminSession(config.adminToken))
+                call.sessions.set(AdminSession("admin"))
                 auditService.record(username, "ADMIN_LOGIN", ip = ip)
                 call.respondRedirect("/admin")
             } else {
@@ -214,7 +214,7 @@ private suspend fun ApplicationCall.adminOr401(config: AppConfig, block: suspend
 }
 
 private fun ApplicationCall.isAdmin(config: AppConfig): Boolean =
-    sessions.get<AdminSession>()?.token == config.adminToken ||
+    sessions.get<AdminSession>()?.token == "admin" ||
         request.headers["X-Admin-Token"] == config.adminToken ||
         (config.adminQueryTokenEnabled && request.queryParameters["token"] == config.adminToken)
 

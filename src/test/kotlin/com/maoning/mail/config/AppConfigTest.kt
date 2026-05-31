@@ -5,8 +5,22 @@ import kotlin.test.assertFailsWith
 
 class AppConfigTest {
     @Test
-    fun rejectsDefaultAdminSecretsForRuntime() {
-        val config = AppConfig(adminToken = "change-me", adminPasswordHash = "")
+    fun rejectsDefaultAdminTokenForRuntime() {
+        val config = AppConfig(
+            adminToken = "change-me",
+            adminPasswordHash = "",
+            adminSessionSecret = "valid-admin-session-secret-32-chars"
+        )
+        assertFailsWith<IllegalArgumentException> { config.validateForRuntime() }
+    }
+
+    @Test
+    fun rejectsDefaultAdminSessionSecretForRuntime() {
+        val config = AppConfig(
+            adminToken = "valid-admin-token",
+            adminPasswordHash = "",
+            adminSessionSecret = "change-me"
+        )
         assertFailsWith<IllegalArgumentException> { config.validateForRuntime() }
     }
 }

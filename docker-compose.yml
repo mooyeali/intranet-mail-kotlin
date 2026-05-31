@@ -16,8 +16,9 @@ services:
       H2_URL: jdbc:h2:/opt/intranet-mail/data/intranet-mail;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
       ATTACHMENT_DIR: /opt/intranet-mail/data/attachments
       ADMIN_USER: admin
-      ADMIN_TOKEN: change-me
+      ADMIN_TOKEN: replace-with-long-random-token
       ADMIN_PASSWORD_HASH: ""
+      ADMIN_SESSION_SECRET: replace-with-at-least-32-characters-secret
       ADMIN_QUERY_TOKEN_ENABLED: "false"
       SECURE_COOKIES: "false"
       SMTP_MAX_CONNECTIONS: "50"
