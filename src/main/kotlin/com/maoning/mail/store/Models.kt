@@ -36,6 +36,16 @@ data class MailMessage(
 )
 
 @Serializable
+data class MailboxState(
+    val messageId: String,
+    val mailbox: String,
+    val box: String,
+    val read: Boolean,
+    val archived: Boolean,
+    val deleted: Boolean
+)
+
+@Serializable
 data class Session(
     val token: String,
     val mailbox: String,

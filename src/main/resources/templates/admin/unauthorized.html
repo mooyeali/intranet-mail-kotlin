@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title}">Unauthorized</title>
+    <style>
+        body { margin:0; min-height:100vh; display:grid; place-items:center; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#fff7ed; color:#7c2d12; }
+        .card { max-width:520px; background:white; border:1px solid #fed7aa; border-radius:24px; padding:32px; box-shadow:0 18px 48px #9a34121f; }
+        h1 { margin-top:0; }
+        code { background:#ffedd5; border-radius:8px; padding:3px 6px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Unauthorized</h1>
+    <p>Admin dashboard requires a valid <code>X-Admin-Token</code> header.</p>
+    <p>JSON admin endpoints remain under <code>/admin/api</code>.</p>
+</div>
+</body>
+</html>

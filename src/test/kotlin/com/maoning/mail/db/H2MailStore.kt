@@ -6,14 +6,19 @@ import kotlinx.serialization.json.Json
 import java.sql.Connection
 import org.flywaydb.core.Flyway
 import javax.sql.DataSource
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
 class H2MailStore(
     override val domain: String,
-    private val dataSource: DataSource
-) : MailStore {
+    val dataSource: DataSource
+) : MailStore, AutoCloseable {
     private val json = Json { ignoreUnknownKeys = true }
+
+    override fun close() {
+        dataSource.closeIfPossible()
+    }
 
     init {
         Flyway.configure()
@@ -62,7 +67,7 @@ class H2MailStore(
     override fun saveSession(session: Session): Session {
         conn().use { c ->
             c.prepareStatement("merge into sessions(token, mailbox, created_at, expires_at) values(?,?,?,?)").use { ps ->
-                ps.setString(1, session.token)
+                ps.setString(1, tokenHash(session.token))
                 ps.setString(2, session.mailbox)
                 ps.setLong(3, session.createdAt)
                 ps.setLong(4, session.expiresAt)
@@ -75,13 +80,13 @@ class H2MailStore(
     override fun findSession(token: String): Session? {
         conn().use { c ->
             c.prepareStatement("select * from sessions where token=?").use { ps ->
-                ps.setString(1, token)
+                ps.setString(1, tokenHash(token))
                 ps.executeQuery().use { rs ->
                     if (!rs.next()) return null
-                    val session = Session(rs.getString("token"), rs.getString("mailbox"), rs.getLong("created_at"), rs.getLong("expires_at"))
+                    val session = Session(token, rs.getString("mailbox"), rs.getLong("created_at"), rs.getLong("expires_at"))
                     if (session.expiresAt < Instant.now().toEpochMilli()) {
                         c.prepareStatement("delete from sessions where token=?").use { del ->
-                            del.setString(1, token)
+                            del.setString(1, tokenHash(token))
                             del.executeUpdate()
                         }
                         return null
@@ -89,6 +94,13 @@ class H2MailStore(
                     return session
                 }
             }
+        }
+    }
+
+    override fun revokeSession(token: String): Int = conn().use { c ->
+        c.prepareStatement("delete from sessions where token=?").use { ps ->
+            ps.setString(1, tokenHash(token))
+            ps.executeUpdate()
         }
     }
 
@@ -138,14 +150,14 @@ class H2MailStore(
         }
     }
 
-    fun deliverQueued(item: QueueItem) {
+    override fun deliverQueued(item: QueueItem) {
         val message = messageById(item.messageId) ?: error("Message not found: ${item.messageId}")
         require(userExists(item.recipient)) { "Recipient not found: ${item.recipient}" }
         conn().use { c -> addMailbox(c, item.recipient, message.id, "inbox", Instant.now().toEpochMilli()) }
     }
 
     private fun addMailbox(c: Connection, mailbox: String, messageId: String, box: String, createdAt: Long) {
-        c.prepareStatement("insert into mailboxes(id, mailbox, message_id, box, created_at) values(?,?,?,?,?)").use { ps ->
+        c.prepareStatement("merge into mailboxes(id, mailbox, message_id, box, created_at) key(mailbox, message_id, box) values(?,?,?,?,?)").use { ps ->
             ps.setString(1, UUID.randomUUID().toString())
             ps.setString(2, mailbox)
             ps.setString(3, messageId)
@@ -155,10 +167,17 @@ class H2MailStore(
         }
     }
 
-    override fun inbox(mailbox: String): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), "inbox", archived = false, deleted = false)
-    override fun sent(mailbox: String): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), "sent", archived = false, deleted = false)
-    override fun archive(mailbox: String): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), null, archived = true, deleted = false)
-    override fun trash(mailbox: String): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), null, archived = null, deleted = true)
+    override fun inbox(mailbox: String, limit: Int, offset: Int): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), "inbox", archived = false, deleted = false, limit, offset)
+    override fun sent(mailbox: String, limit: Int, offset: Int): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), "sent", archived = false, deleted = false, limit, offset)
+    override fun findSentMessage(messageId: String, mailbox: String): MailMessage? = conn().use { c ->
+        c.prepareStatement("select m.*, b.read_flag as mailbox_read_flag from messages m join mailboxes b on b.message_id=m.id where m.id=? and b.mailbox=? and b.box='sent' and b.deleted=false limit 1").use { ps ->
+            ps.setString(1, messageId)
+            ps.setString(2, normalizeMailbox(mailbox))
+            ps.executeQuery().use { rs -> if (rs.next()) rs.toMessage() else null }
+        }
+    }
+    override fun archive(mailbox: String, limit: Int, offset: Int): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), null, archived = true, deleted = false, limit, offset)
+    override fun trash(mailbox: String, limit: Int, offset: Int): List<MailMessage> = mailboxMessages(normalizeMailbox(mailbox), null, archived = null, deleted = true, limit, offset)
 
     override fun findMessageForMailbox(messageId: String, mailbox: String, includeDeleted: Boolean): MailMessage? = conn().use { c ->
         val sql = buildString {
@@ -170,6 +189,19 @@ class H2MailStore(
             ps.setString(1, messageId)
             ps.setString(2, normalizeMailbox(mailbox))
             ps.executeQuery().use { rs -> if (rs.next()) rs.toMessage() else null }
+        }
+    }
+
+    override fun mailboxState(mailbox: String, messageId: String, includeDeleted: Boolean): MailboxState? = conn().use { c ->
+        val sql = buildString {
+            append("select message_id, mailbox, box, read_flag, archived, deleted from mailboxes where message_id=? and mailbox=? ")
+            if (!includeDeleted) append("and deleted=false ")
+            append("limit 1")
+        }
+        c.prepareStatement(sql).use { ps ->
+            ps.setString(1, messageId)
+            ps.setString(2, normalizeMailbox(mailbox))
+            ps.executeQuery().use { rs -> if (rs.next()) rs.toMailboxState() else null }
         }
     }
 
@@ -206,20 +238,29 @@ class H2MailStore(
         }
     }
 
-    private fun mailboxMessages(mailbox: String, box: String?, archived: Boolean?, deleted: Boolean): List<MailMessage> = conn().use { c ->
+    private fun mailboxMessages(mailbox: String, box: String?, archived: Boolean?, deleted: Boolean, limit: Int, offset: Int): List<MailMessage> = conn().use { c ->
         val sql = buildString {
             append("select m.*, b.read_flag as mailbox_read_flag from messages m join mailboxes b on b.message_id=m.id where b.mailbox=? and b.deleted=? ")
             if (box != null) append("and b.box=? ")
             if (archived != null) append("and b.archived=? ")
-            append("order by b.created_at desc")
+            append("order by b.created_at desc limit ? offset ?")
         }
         c.prepareStatement(sql).use { ps ->
             var i = 1
             ps.setString(i++, mailbox)
             ps.setBoolean(i++, deleted)
             if (box != null) ps.setString(i++, box)
-            if (archived != null) ps.setBoolean(i, archived)
+            if (archived != null) ps.setBoolean(i++, archived)
+            ps.setInt(i++, limit.coerceIn(1, 200))
+            ps.setInt(i, offset.coerceAtLeast(0))
             ps.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toMessage()) } }
+        }
+    }
+
+    override fun deleteExpiredSessions(now: Long): Int = conn().use { c ->
+        c.prepareStatement("delete from sessions where expires_at < ?").use { ps ->
+            ps.setLong(1, now)
+            ps.executeUpdate()
         }
     }
 
@@ -240,6 +281,13 @@ class H2MailStore(
         c.prepareStatement(sql).use { ps -> if (status != null) ps.setString(1, status.name); ps.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toQueueItem()) } } }
     }
 
+    override fun queueItemsForMessage(messageId: String): List<QueueItem> = conn().use { c ->
+        c.prepareStatement("select * from queue where message_id=? order by updated_at desc").use { ps ->
+            ps.setString(1, messageId)
+            ps.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toQueueItem()) } }
+        }
+    }
+
     override fun nextQueued(limit: Int): List<QueueItem> = conn().use { c ->
         c.prepareStatement("select * from queue where status in (?, ?) and next_attempt_at <= ? order by next_attempt_at asc limit ?").use { ps ->
             ps.setString(1, QueueStatus.QUEUED.name)
@@ -250,9 +298,26 @@ class H2MailStore(
         }
     }
 
+    override fun markQueueInProgress(id: String, attempts: Int): Boolean {
+        return conn().use { c ->
+            c.prepareStatement("update queue set status=?, attempts=?, updated_at=? where id=? and status in (?, ?) and attempts=? and next_attempt_at <= ?").use { ps ->
+                val now = Instant.now().toEpochMilli()
+                ps.setString(1, QueueStatus.RETRY.name)
+                ps.setInt(2, attempts + 1)
+                ps.setLong(3, now)
+                ps.setString(4, id)
+                ps.setString(5, QueueStatus.QUEUED.name)
+                ps.setString(6, QueueStatus.RETRY.name)
+                ps.setInt(7, attempts)
+                ps.setLong(8, now)
+                ps.executeUpdate() > 0
+            }
+        }
+    }
+
     override fun markQueueDelivered(id: String) = updateQueue(id, QueueStatus.DELIVERED, null, null, false)
-    override fun markQueueRetry(id: String, error: String, nextAttemptAt: Long) = updateQueue(id, QueueStatus.RETRY, error, nextAttemptAt, true)
-    override fun markQueueDead(id: String, error: String) = updateQueue(id, QueueStatus.DEAD, error, null, true)
+    override fun markQueueRetry(id: String, error: String, nextAttemptAt: Long, attempts: Int) = updateQueue(id, QueueStatus.RETRY, error, nextAttemptAt, false)
+    override fun markQueueDead(id: String, error: String, attempts: Int) = updateQueue(id, QueueStatus.DEAD, error, null, false)
 
     private fun updateQueue(id: String, status: QueueStatus, error: String?, next: Long?, bumpAttempts: Boolean) {
         conn().use { c ->
@@ -281,6 +346,15 @@ class H2MailStore(
         createdAt = getLong("created_at")
     )
 
+    private fun java.sql.ResultSet.toMailboxState() = MailboxState(
+        messageId = getString("message_id"),
+        mailbox = getString("mailbox"),
+        box = getString("box"),
+        read = getBoolean("read_flag"),
+        archived = getBoolean("archived"),
+        deleted = getBoolean("deleted")
+    )
+
     private fun java.sql.ResultSet.toQueueItem() = QueueItem(
         id = getString("id"),
         messageId = getString("message_id"),
@@ -293,3 +367,7 @@ class H2MailStore(
         updatedAt = getLong("updated_at")
     )
 }
+
+private fun tokenHash(token: String): String = MessageDigest.getInstance("SHA-256")
+    .digest(token.toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it) }

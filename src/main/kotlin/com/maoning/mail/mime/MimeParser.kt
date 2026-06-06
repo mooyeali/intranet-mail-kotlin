@@ -6,6 +6,7 @@ import jakarta.mail.Multipart
 import jakarta.mail.Part
 import jakarta.mail.Session
 import jakarta.mail.internet.MimeMessage
+import jakarta.mail.internet.MimeUtility
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.Properties
@@ -42,7 +43,7 @@ class MimeParser(
         val isAttachment = disposition.equals(Part.ATTACHMENT, ignoreCase = true) || fileName != null
         when {
             part.isMimeType("text/plain") && !isAttachment -> bodies += part.content.toString()
-            part.isMimeType("text/html") && !isAttachment && bodies.isEmpty() -> bodies += part.content.toString().replace(Regex("<[^>]+>"), "")
+            part.isMimeType("text/html") && !isAttachment && bodies.isEmpty() -> bodies += htmlToText(part.content.toString())
             part.isMimeType("multipart/*") -> {
                 val multipart = part.content as Multipart
                 for (i in 0 until multipart.count) collect(multipart.getBodyPart(i), bodies, attachments, totalAttachmentBytes)
@@ -63,9 +64,10 @@ class MimeParser(
                     totalAttachmentBytes[0] += size
                     out.toByteArray()
                 }
-                val stored = attachmentStorage.save(bytes, fileName ?: "attachment.bin")
+                val decodedFileName = decodeMimeText(fileName) ?: "attachment.bin"
+                val stored = attachmentStorage.save(bytes, decodedFileName)
                 attachments += Attachment(
-                    fileName = fileName ?: "attachment.bin",
+                    fileName = decodedFileName,
                     contentType = part.contentType.substringBefore(';').trim(),
                     size = stored.size,
                     path = stored.path
@@ -73,4 +75,26 @@ class MimeParser(
             }
         }
     }
+
+    private fun decodeMimeText(value: String?): String? = value
+        ?.takeIf { it.isNotBlank() }
+        ?.let { MimeUtility.decodeText(it) }
+
+    private fun htmlToText(html: String): String = html
+        .replace(Regex("(?is)<(script|style)[^>]*>.*?</\\1>"), " ")
+        .replace(Regex("(?i)<br\\s*/?>"), "\n")
+        .replace(Regex("(?i)</p>"), "\n")
+        .replace(Regex("<[^>]+>"), " ")
+        .decodeHtmlEntities()
+        .replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
+        .replace(Regex(" *\\n *"), "\n")
+        .trim()
+
+    private fun String.decodeHtmlEntities(): String = this
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
 }

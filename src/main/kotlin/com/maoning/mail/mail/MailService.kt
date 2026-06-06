@@ -1,6 +1,7 @@
 package com.maoning.mail.mail
 
 import com.maoning.mail.audit.AuditService
+import com.maoning.mail.config.AppConfig
 import com.maoning.mail.mime.MimeParser
 import com.maoning.mail.store.MailMessage
 import com.maoning.mail.store.MailStore
@@ -8,10 +9,12 @@ import com.maoning.mail.store.MailStore
 class MailService(
     private val store: MailStore,
     private val mimeParser: MimeParser,
-    private val auditService: AuditService
+    private val auditService: AuditService,
+    private val config: AppConfig = AppConfig()
 ) {
     fun send(from: String, to: List<String>, subject: String, body: String): MailMessage {
         require(to.isNotEmpty()) { "At least one recipient is required" }
+        require(to.size <= config.maxRecipients) { "Recipient count exceeds MAX_RECIPIENTS (${config.maxRecipients})" }
         require(subject.length <= 200) { "Subject is too long" }
         val normalizedFrom = store.normalizeMailbox(from)
         require(store.userExists(normalizedFrom)) { "Sender not found: $normalizedFrom" }
@@ -32,6 +35,7 @@ class MailService(
 
     fun receiveSmtp(from: String, to: List<String>, raw: String): MailMessage {
         require(to.isNotEmpty()) { "At least one recipient is required" }
+        require(to.size <= config.maxRecipients) { "Recipient count exceeds MAX_RECIPIENTS (${config.maxRecipients})" }
         val parsed = mimeParser.parse(raw)
         val normalizedTo = to.map { store.normalizeMailbox(it) }
         normalizedTo.forEach { require(store.userExists(it)) { "Recipient not found: $it" } }
@@ -52,6 +56,6 @@ class MailService(
         return message
     }
 
-    fun inbox(mailbox: String) = store.inbox(mailbox)
-    fun sent(mailbox: String) = store.sent(mailbox)
+    fun inbox(mailbox: String, limit: Int = 100, offset: Int = 0) = store.inbox(mailbox, limit, offset)
+    fun sent(mailbox: String, limit: Int = 100, offset: Int = 0) = store.sent(mailbox, limit, offset)
 }

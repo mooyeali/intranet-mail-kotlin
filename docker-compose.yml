@@ -9,29 +9,47 @@ services:
       - "2525:2525"
       - "1110:1110"
     environment:
-      MAIL_DOMAIN: corp.local
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-corp.local}
       HTTP_PORT: "8080"
       SMTP_PORT: "2525"
       POP3_PORT: "1110"
       H2_URL: jdbc:h2:/opt/intranet-mail/data/intranet-mail;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
       ATTACHMENT_DIR: /opt/intranet-mail/data/attachments
-      ADMIN_USER: admin
-      ADMIN_TOKEN: replace-with-long-random-token
-      ADMIN_PASSWORD_HASH: ""
-      ADMIN_SESSION_SECRET: replace-with-at-least-32-characters-secret
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN or ADMIN_PASSWORD_HASH before docker compose up}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?set ADMIN_SESSION_SECRET to a 32+ char random value}
       ADMIN_QUERY_TOKEN_ENABLED: "false"
-      SECURE_COOKIES: "false"
-      SMTP_MAX_CONNECTIONS: "50"
-      POP3_MAX_CONNECTIONS: "50"
-      SOCKET_TIMEOUT_MILLIS: "30000"
-      MAX_MESSAGE_BYTES: "10485760"
-      MAX_ATTACHMENT_BYTES: "10485760"
-      MAX_TOTAL_ATTACHMENT_BYTES: "20971520"
-      MAX_QUEUE_ATTEMPTS: "5"
-      LOGIN_MAX_FAILURES: "5"
-      LOGIN_WINDOW_SECONDS: "300"
+      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      SOCKET_SERVERS_ENABLED: ${SOCKET_SERVERS_ENABLED:-true}
+      SMTP_MAX_CONNECTIONS: ${SMTP_MAX_CONNECTIONS:-50}
+      POP3_MAX_CONNECTIONS: ${POP3_MAX_CONNECTIONS:-50}
+      SOCKET_TIMEOUT_MILLIS: ${SOCKET_TIMEOUT_MILLIS:-30000}
+      MAX_MESSAGE_BYTES: ${MAX_MESSAGE_BYTES:-10485760}
+      MAX_ATTACHMENT_BYTES: ${MAX_ATTACHMENT_BYTES:-10485760}
+      MAX_TOTAL_ATTACHMENT_BYTES: ${MAX_TOTAL_ATTACHMENT_BYTES:-20971520}
+      MAX_QUEUE_ATTEMPTS: ${MAX_QUEUE_ATTEMPTS:-5}
+      LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
+      LOGIN_WINDOW_SECONDS: ${LOGIN_WINDOW_SECONDS:-300}
     volumes:
       - intranet-mail-data:/opt/intranet-mail/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   intranet-mail-data:

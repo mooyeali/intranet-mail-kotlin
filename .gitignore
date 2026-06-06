@@ -5,6 +5,7 @@ out/
 
 # Runtime data
 data/
+.codegraph/
 *.db
 *.mv.db
 *.trace.db
