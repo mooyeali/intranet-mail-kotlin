@@ -147,7 +147,7 @@ else
 fi
 
 step "smtp smoke"
-SMTP_TRANSCRIPT="$(SMTP_PORT="$SMTP_PORT" python3 -c '
+SMTP_TRANSCRIPT="$(SMTP_PORT="$SMTP_PORT" ALICE_SMOKE_SECRET="$ALICE_SMOKE_SECRET" python3 -c '
 import base64
 import os
 import socket
