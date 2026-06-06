@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title}">Intranet Mail Webmail</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --brand: #2563eb;
+            --brand-hover: #1d4ed8;
+            --text: #0f172a;
+            --muted: #64748b;
+            --subtle: #eff6ff;
+            --page: #f8fafc;
+            --card: #ffffff;
+            --border: #dbe3ef;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --warning: #d97706;
+            --shadow: 0 12px 40px rgba(15, 23, 42, 0.10);
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(135deg, #eff6ff, var(--page)); color: var(--text); }
+        button, input, textarea, select { font: inherit; }
+        button { min-height: 44px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: var(--text); cursor: pointer; font-weight: 700; }
+        button:hover:not(:disabled) { border-color: var(--brand); }
+        button:disabled { cursor: wait; opacity: .65; }
+        button.primary { background: var(--brand); border-color: var(--brand); color: white; }
+        button.primary:hover:not(:disabled) { background: var(--brand-hover); }
+        button.danger { border-color: #fecaca; color: var(--danger); }
+        a, button, input, textarea, select { outline-offset: 3px; }
+        a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--brand); }
+        .hidden { display: none !important; }
+        .auth-layout { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+        .auth-card, .panel { background: var(--card); border: 1px solid var(--border); border-radius: 24px; box-shadow: var(--shadow); }
+        .auth-card { width: min(100%, 440px); padding: 28px; }
+        .brand { margin: 0 0 8px; font-size: 32px; letter-spacing: -.03em; }
+        .muted { color: var(--muted); }
+        .tabs, .nav-list, .actions, .form-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .tabs { margin: 22px 0; }
+        .tabs button[aria-selected="true"], .nav-list button[aria-current="page"] { background: var(--subtle); border-color: #bfdbfe; color: var(--brand); }
+        label { display: block; margin: 14px 0 6px; font-weight: 700; }
+        input, textarea, select { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: white; color: var(--text); }
+        textarea { min-height: 160px; resize: vertical; }
+        .app-shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+        header.topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; backdrop-filter: blur(8px); }
+        .app-body { display: grid; grid-template-columns: 240px 1fr; gap: 20px; width: min(1240px, 100%); margin: 0 auto; padding: 20px; }
+        nav.panel { padding: 16px; align-self: start; position: sticky; top: 84px; }
+        .nav-list { flex-direction: column; }
+        .nav-list button { width: 100%; justify-content: flex-start; text-align: left; }
+        main.panel { min-height: 70vh; padding: 24px; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
+        .message-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+        .message-row { width: 100%; min-height: 72px; border: 1px solid var(--border); border-radius: 16px; background: white; padding: 14px; text-align: left; display: grid; gap: 5px; }
+        .message-row.unread { background: var(--subtle); border-left: 5px solid var(--brand); font-weight: 700; }
+        .row-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 14px; }
+        .subject { font-size: 17px; }
+        .preview { color: #334155; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .alert { border-radius: 14px; padding: 12px 14px; margin: 14px 0; background: var(--subtle); color: #1e3a8a; }
+        .alert.error { background: #fef2f2; color: #991b1b; }
+        .alert.success { background: #f0fdf4; color: #166534; }
+        .detail-body { white-space: pre-wrap; background: #f8fafc; border: 1px solid var(--border); border-radius: 16px; padding: 16px; line-height: 1.65; }
+        .attachments { display: grid; gap: 10px; margin: 16px 0; }
+        .attachment { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 14px; padding: 10px; }
+        .endpoint-summary { margin-top: 28px; font-size: 13px; color: var(--muted); }
+        .endpoint-summary code { display: inline-block; margin: 4px; padding: 3px 6px; border-radius: 6px; background: #e2e8f0; color: #334155; }
+        @media (max-width: 760px) {
+            .app-body { grid-template-columns: 1fr; padding: 12px; }
+            nav.panel { position: static; }
+            .nav-list { flex-direction: row; overflow-x: auto; flex-wrap: nowrap; }
+            .nav-list button { width: auto; white-space: nowrap; }
+            header.topbar { align-items: flex-start; }
+            main.panel { padding: 18px; }
+            .toolbar { align-items: flex-start; flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<div data-webmail-app>
+    <section id="authScreen" class="auth-layout" aria-labelledby="authTitle">
+        <div class="auth-card">
+            <h1 id="authTitle" class="brand">Intranet Mail</h1>
+            <p class="muted">Domain: <strong th:text="${domain}">intra.local</strong></p>
+            <div class="tabs" role="tablist" aria-label="Authentication mode">
+                <button id="loginTab" type="button" role="tab" aria-selected="true">Login</button>
+                <button id="registerTab" type="button" role="tab" aria-selected="false">Register</button>
+            </div>
+            <div id="authNotice" class="alert hidden" role="status" aria-live="polite"></div>
+            <form id="loginForm">
+                <label for="loginUsername">Username or mailbox</label>
+                <input id="loginUsername" name="username" autocomplete="username" required>
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+                <div class="form-actions" style="margin-top:18px">
+                    <button class="primary" type="submit">Sign in</button>
+                </div>
+            </form>
+            <form id="registerForm" class="hidden">
+                <label for="registerUsername">Username</label>
+                <input id="registerUsername" name="username" autocomplete="username" required>
+                <label for="registerPassword">Password</label>
+                <input id="registerPassword" name="password" type="password" autocomplete="new-password" required>
+                <label for="registerConfirm">Confirm password</label>
+                <input id="registerConfirm" name="confirm" type="password" autocomplete="new-password" required>
+                <p class="muted">Need a mailbox? Create one if your intranet allows self-service.</p>
+                <div class="form-actions">
+                    <button class="primary" type="submit">Create mailbox</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <section id="appScreen" class="app-shell hidden" aria-label="Webmail application">
+        <header class="topbar">
+            <div>
+                <strong>Intranet Mail</strong><br>
+                <span id="currentMailbox" class="muted"></span>
+            </div>
+            <button id="logoutButton" type="button">Logout</button>
+        </header>
+        <div class="app-body">
+            <nav class="panel" aria-label="Mailbox navigation">
+                <div class="nav-list">
+                    <button type="button" data-view="compose">Compose</button>
+                    <button type="button" data-view="inbox" aria-current="page">Inbox</button>
+                    <button type="button" data-view="sent">Sent</button>
+                    <button type="button" data-view="search">Search</button>
+                    <button type="button" data-view="archive">Archive</button>
+                    <button type="button" data-view="trash">Trash</button>
+                </div>
+            </nav>
+            <main id="mainContent" class="panel" tabindex="-1">
+                <div id="globalStatus" class="alert hidden" role="status" aria-live="polite"></div>
+                <div id="viewRoot"></div>
+                <details class="endpoint-summary">
+                    <summary>REST endpoints used by this Webmail shell</summary>
+                    <span th:each="endpoint : ${apiEndpoints}"><code th:text="${endpoint}">/api/login</code></span>
+                </details>
+            </main>
+        </div>
+    </section>
+</div>
+
+<script th:inline="javascript">
+(function () {
+    'use strict';
+
+    const SESSION_KEY = 'webmail.session';
+    const domain = /*[[${domain}]]*/ 'intra.local';
+    const state = {
+        session: loadSession(),
+        view: 'inbox',
+        previousView: 'inbox',
+        messages: [],
+        selectedMessage: null,
+        search: { q: '', box: '', results: [] },
+        pendingAction: null
+    };
+
+    const authScreen = document.getElementById('authScreen');
+    const appScreen = document.getElementById('appScreen');
+    const authNotice = document.getElementById('authNotice');
+    const globalStatus = document.getElementById('globalStatus');
+    const viewRoot = document.getElementById('viewRoot');
+    const mainContent = document.getElementById('mainContent');
+
+    document.getElementById('loginTab').addEventListener('click', () => setAuthMode('login'));
+    document.getElementById('registerTab').addEventListener('click', () => setAuthMode('register'));
+    document.getElementById('loginForm').addEventListener('submit', onLogin);
+    document.getElementById('registerForm').addEventListener('submit', onRegister);
+    document.getElementById('logoutButton').addEventListener('click', logout);
+    document.querySelectorAll('[data-view]').forEach(button => {
+        button.addEventListener('click', () => navigate(button.dataset.view));
+    });
+
+    if (state.session) {
+        showApp();
+        loadMailbox('inbox');
+    } else {
+        showAuth();
+    }
+
+    function setAuthMode(mode) {
+        const login = mode === 'login';
+        document.getElementById('loginTab').setAttribute('aria-selected', String(login));
+        document.getElementById('registerTab').setAttribute('aria-selected', String(!login));
+        document.getElementById('loginForm').classList.toggle('hidden', !login);
+        document.getElementById('registerForm').classList.toggle('hidden', login);
+        hideAuthNotice();
+    }
+
+    async function onLogin(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        await withDisabled(form, async () => {
+            try {
+                const response = await fetch('/api/login', jsonRequest(formToObject(form)));
+                if (!response.ok) throw await apiError(response, 'Invalid username or password.');
+                state.session = await response.json();
+                saveSession(state.session);
+                showApp();
+                await loadMailbox('inbox');
+            } catch (error) {
+                showAuthNotice(error.message || 'Invalid username or password.', true);
+            }
+        });
+    }
+
+    async function onRegister(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const data = formToObject(form);
+        if (data.password !== data.confirm) {
+            showAuthNotice('Passwords do not match.', true);
+            return;
+        }
+        await withDisabled(form, async () => {
+            try {
+                const response = await fetch('/api/register', jsonRequest({ username: data.username, password: data.password }));
+                if (!response.ok) throw await apiError(response, 'Could not create mailbox.');
+                form.reset();
+                setAuthMode('login');
+                showAuthNotice('Mailbox created. Please sign in.', false);
+            } catch (error) {
+                showAuthNotice(error.message || 'Could not create mailbox.', true);
+            }
+        });
+    }
+
+    function navigate(view) {
+        if (view === 'compose') return renderCompose();
+        if (view === 'search') return renderSearch();
+        return loadMailbox(view);
+    }
+
+    async function loadMailbox(view) {
+        state.view = view;
+        state.previousView = view;
+        setActiveNav(view);
+        renderLoading(titleFor(view));
+        try {
+            const messages = await apiGet(endpointFor(view));
+            state.messages = normalizeMessages(messages, view);
+            renderList(view, state.messages);
+        } catch (error) {
+            renderError(titleFor(view), error.message || `Could not load ${view}.`, () => loadMailbox(view));
+        }
+    }
+
+    function renderList(view, messages) {
+        renderShell(titleFor(view), `<button type="button" data-refresh>Refresh</button>`);
+        document.querySelector('[data-refresh]').addEventListener('click', () => loadMailbox(view));
+        if (!messages.length) {
+            viewRoot.insertAdjacentHTML('beforeend', `<p class="muted">${escapeHtml(emptyCopy(view))}</p>`);
+            if (view === 'sent') viewRoot.insertAdjacentHTML('beforeend', '<button type="button" class="primary" data-compose>Compose</button>');
+            const compose = viewRoot.querySelector('[data-compose]');
+            if (compose) compose.addEventListener('click', renderCompose);
+            focusMain();
+            return;
+        }
+        const rows = messages.map(message => `
+            <li>
+                <button type="button" class="message-row ${message.read ? '' : 'unread'}" data-open="${escapeAttr(message.id)}">
+                    <span class="row-meta"><span>${escapeHtml(rowActor(message, view))}</span><time>${formatTime(message.createdAt)}</time></span>
+                    <span class="subject">${message.read ? '' : 'Unread · '}${escapeHtml(subjectOf(message))}</span>
+                    <span class="preview">${escapeHtml(previewOf(message))}${message.attachments.length ? ' · Attachment' : ''}</span>
+                </button>
+            </li>`).join('');
+        viewRoot.insertAdjacentHTML('beforeend', `<ul class="message-list">${rows}</ul>`);
+        viewRoot.querySelectorAll('[data-open]').forEach(button => button.addEventListener('click', () => openDetail(button.dataset.open, view)));
+        focusMain();
+    }
+
+    async function openDetail(messageId, originView) {
+        state.previousView = originView || state.view;
+        state.view = 'detail';
+        setActiveNav(originView);
+        renderLoading('Message detail');
+        try {
+            const detail = normalizeMessage(await apiGet(`/api/mail/${encodeURIComponent(messageId)}`), originView);
+            state.selectedMessage = detail;
+            renderDetail(detail, originView);
+            if (originView === 'inbox' && !detail.read) {
+                await doAction(detail.id, 'read', { silent: true, stayOnDetail: true });
+            }
+        } catch (error) {
+            renderError('Message detail', error.message || 'Message not found or no longer available.', () => openDetail(messageId, originView), true);
+        }
+    }
+
+    function renderDetail(message, originView) {
+        renderShell('Message detail', `<button type="button" data-back>Back</button>`);
+        viewRoot.querySelector('[data-back]').addEventListener('click', () => loadMailbox(originView || state.previousView || 'inbox'));
+        const actions = actionButtons(message, originView).map(action => `<button type="button" class="${action.className || ''}" data-action="${action.name}">${action.label}</button>`).join('');
+        const attachments = message.attachments.length ? `
+            <h3>Attachments</h3>
+            <div class="attachments">
+                ${message.attachments.map(att => `<div class="attachment"><span>${escapeHtml(att.fileName || 'attachment')} <small class="muted">${escapeHtml(att.contentType || '')} ${formatSize(att.size)}</small></span><button type="button" data-download="${escapeAttr(att.id)}">Download</button></div>`).join('')}
+            </div>` : '';
+        viewRoot.insertAdjacentHTML('beforeend', `
+            <article>
+                <h3>${escapeHtml(subjectOf(message))}</h3>
+                <p class="muted"><strong>From:</strong> ${escapeHtml(message.from || '')}<br><strong>To:</strong> ${escapeHtml((message.to || []).join(', '))}<br><strong>Date:</strong> ${formatTime(message.createdAt)}</p>
+                <div class="actions">${actions}</div>
+                ${attachments}
+                <h3>Body</h3>
+                <div class="detail-body">${escapeHtml(message.body || '')}</div>
+            </article>`);
+        viewRoot.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => doAction(message.id, button.dataset.action)));
+        viewRoot.querySelectorAll('[data-download]').forEach(button => button.addEventListener('click', () => downloadAttachment(message.id, button.dataset.download, button)));
+        focusMain();
+    }
+
+    function actionButtons(message, originView) {
+        if (originView === 'sent') return [];
+        if (originView === 'trash' || message.deleted) return [{ name: 'restore', label: 'Restore' }];
+        const actions = [];
+        actions.push(message.read ? { name: 'unread', label: 'Mark unread' } : { name: 'read', label: 'Mark read' });
+        actions.push(originView === 'archive' || message.archived ? { name: 'unarchive', label: 'Unarchive' } : { name: 'archive', label: 'Archive' });
+        actions.push({ name: 'trash', label: 'Move to trash', className: 'danger' });
+        return actions;
+    }
+
+    async function doAction(messageId, action, options) {
+        const opts = options || {};
+        try {
+            const response = await apiPost(`/api/mail/${encodeURIComponent(messageId)}/${action}`);
+            if (state.selectedMessage && state.selectedMessage.id === messageId) {
+                state.selectedMessage.read = response.read ?? state.selectedMessage.read;
+                state.selectedMessage.archived = response.archived ?? state.selectedMessage.archived;
+                state.selectedMessage.deleted = response.deleted ?? state.selectedMessage.deleted;
+            }
+            if (!opts.silent) showStatus(actionSuccessCopy(action), 'success');
+            if (!opts.stayOnDetail) {
+                const next = action === 'restore' ? 'trash' : (state.previousView || 'inbox');
+                await loadMailbox(next);
+            } else if (state.selectedMessage) {
+                renderDetail(state.selectedMessage, state.previousView);
+            }
+        } catch (error) {
+            showStatus(error.message || 'Action failed.', 'error');
+        }
+    }
+
+    function renderCompose() {
+        state.view = 'compose';
+        setActiveNav('compose');
+        renderShell('Compose', '');
+        viewRoot.insertAdjacentHTML('beforeend', `
+            <form id="composeForm">
+                <label for="composeTo">To</label>
+                <textarea id="composeTo" name="to" rows="3" required aria-describedby="composeHelp"></textarea>
+                <p id="composeHelp" class="muted">Use commas or new lines for multiple recipients. Plain text only. Attachments and rich text are not available in v0.2.</p>
+                <label for="composeSubject">Subject</label>
+                <input id="composeSubject" name="subject">
+                <label for="composeBody">Body</label>
+                <textarea id="composeBody" name="body" required></textarea>
+                <div class="form-actions" style="margin-top:16px"><button class="primary" type="submit">Send</button><button type="button" data-cancel>Cancel</button></div>
+            </form>`);
+        const form = document.getElementById('composeForm');
+        form.addEventListener('submit', onSend);
+        form.querySelector('[data-cancel]').addEventListener('click', () => loadMailbox('inbox'));
+        focusMain();
+    }
+
+    async function onSend(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const data = formToObject(form);
+        const recipients = splitRecipients(data.to);
+        if (!recipients.length) {
+            showStatus('One or more recipients are invalid.', 'error');
+            return;
+        }
+        await withDisabled(form, async () => {
+            try {
+                await apiPost('/api/mail/send', { to: recipients, subject: data.subject || '', body: data.body || '' });
+                form.reset();
+                renderShell('Message sent', '<button type="button" data-sent>View sent</button><button type="button" data-compose-again>Compose another</button>');
+                viewRoot.insertAdjacentHTML('beforeend', '<p class="alert success">Message sent successfully.</p>');
+                viewRoot.querySelector('[data-sent]').addEventListener('click', () => loadMailbox('sent'));
+                viewRoot.querySelector('[data-compose-again]').addEventListener('click', renderCompose);
+            } catch (error) {
+                showStatus(error.message || 'Could not send message.', 'error');
+            }
+        });
+    }
+
+    function renderSearch() {
+        state.view = 'search';
+        setActiveNav('search');
+        renderShell('Search', '');
+        viewRoot.insertAdjacentHTML('beforeend', `
+            <form id="searchForm">
+                <label for="searchQuery">Search mail</label>
+                <input id="searchQuery" name="q" value="${escapeAttr(state.search.q)}" required>
+                <label for="searchBox">Scope</label>
+                <select id="searchBox" name="box">
+                    <option value="">All</option>
+                    <option value="inbox">Inbox</option>
+                    <option value="sent">Sent</option>
+                </select>
+                <div class="form-actions" style="margin-top:16px"><button class="primary" type="submit">Search</button></div>
+            </form>
+            <p class="muted">Enter a keyword to search your mail.</p>`);
+        document.getElementById('searchBox').value = state.search.box;
+        document.getElementById('searchForm').addEventListener('submit', onSearch);
+        focusMain();
+    }
+
+    async function onSearch(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const data = formToObject(form);
+        state.search = { q: data.q || '', box: data.box || '', results: [] };
+        if (!state.search.q.trim()) return;
+        await withDisabled(form, async () => {
+            try {
+                const params = new URLSearchParams({ q: state.search.q, limit: '50' });
+                if (state.search.box) params.set('box', state.search.box);
+                const results = await apiGet(`/api/mail/search?${params}`);
+                state.search.results = normalizeMessages(results, state.search.box || 'search');
+                renderSearchResults();
+            } catch (error) {
+                renderError('Search', error.message || 'Search failed.', renderSearch);
+            }
+        });
+    }
+
+    function renderSearchResults() {
+        renderShell('Search results', '<button type="button" data-new-search>New search</button>');
+        viewRoot.querySelector('[data-new-search]').addEventListener('click', renderSearch);
+        if (!state.search.results.length) {
+            viewRoot.insertAdjacentHTML('beforeend', '<p class="muted">No messages match this search.</p>');
+            return;
+        }
+        const rows = state.search.results.map(message => `<li><button type="button" class="message-row ${message.read ? '' : 'unread'}" data-open="${escapeAttr(message.id)}"><span class="row-meta"><span>${escapeHtml(rowActor(message, 'search'))}</span><time>${formatTime(message.createdAt)}</time></span><span class="subject">${escapeHtml(subjectOf(message))}</span><span class="preview">${escapeHtml(previewOf(message))}</span></button></li>`).join('');
+        viewRoot.insertAdjacentHTML('beforeend', `<ul class="message-list">${rows}</ul>`);
+        viewRoot.querySelectorAll('[data-open]').forEach(button => button.addEventListener('click', () => openDetail(button.dataset.open, 'search')));
+    }
+
+    async function downloadAttachment(messageId, attachmentId, button) {
+        await withButtonDisabled(button, async () => {
+            try {
+                const response = await fetch(`/api/mail/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`, authHeaders());
+                if (response.status === 401) return expireSession();
+                if (!response.ok) throw await apiError(response, 'Attachment unavailable.');
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = button.closest('.attachment').querySelector('span').textContent.trim().split(' ')[0] || 'attachment';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (error) {
+                showStatus(error.message || 'Attachment unavailable.', 'error');
+            }
+        });
+    }
+
+    function renderShell(title, controlsHtml) {
+        viewRoot.innerHTML = `<div class="toolbar"><div><h2>${escapeHtml(title)}</h2></div><div class="actions">${controlsHtml || ''}</div></div>`;
+        hideStatus();
+    }
+
+    function renderLoading(title) {
+        renderShell(title, '');
+        viewRoot.insertAdjacentHTML('beforeend', `<p class="muted">Loading ${escapeHtml(title.toLowerCase())}...</p>`);
+        focusMain();
+    }
+
+    function renderError(title, message, retry, includeBack) {
+        renderShell(title, includeBack ? '<button type="button" data-back>Back</button><button type="button" data-retry>Retry</button>' : '<button type="button" data-retry>Retry</button>');
+        viewRoot.insertAdjacentHTML('beforeend', `<div class="alert error">${escapeHtml(message)}</div>`);
+        const retryButton = viewRoot.querySelector('[data-retry]');
+        if (retryButton) retryButton.addEventListener('click', retry);
+        const backButton = viewRoot.querySelector('[data-back]');
+        if (backButton) backButton.addEventListener('click', () => loadMailbox(state.previousView || 'inbox'));
+        focusMain();
+    }
+
+    async function apiGet(path) {
+        const response = await fetch(path, authHeaders());
+        return handleJsonResponse(response);
+    }
+
+    async function apiPost(path, body) {
+        const response = await fetch(path, jsonRequest(body || {}, { Authorization: `Bearer ${state.session.token}` }));
+        return handleJsonResponse(response);
+    }
+
+    async function handleJsonResponse(response) {
+        if (response.status === 401) return expireSession();
+        if (!response.ok) throw await apiError(response, 'Network error. Check connection and try again.');
+        return response.json();
+    }
+
+    function authHeaders() {
+        return { headers: { Authorization: `Bearer ${state.session.token}` } };
+    }
+
+    function jsonRequest(body, extraHeaders) {
+        return { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, extraHeaders || {}), body: JSON.stringify(body || {}) };
+    }
+
+    async function apiError(response, fallback) {
+        try {
+            const body = await response.json();
+            return new Error(safeError(body.error, response.status, fallback));
+        } catch (_) {
+            return new Error(fallback);
+        }
+    }
+
+    function safeError(error, status, fallback) {
+        if (status === 413) return 'Message is too large to send.';
+        if (!error) return fallback;
+        if (String(error).toLowerCase().includes('invalid')) return 'Invalid username or password.';
+        return String(error);
+    }
+
+    function expireSession() {
+        logout('Session expired. Please sign in again.');
+        throw new Error('Session expired. Please sign in again.');
+    }
+
+    function showApp() {
+        authScreen.classList.add('hidden');
+        appScreen.classList.remove('hidden');
+        document.getElementById('currentMailbox').textContent = state.session.mailbox || domain;
+    }
+
+    function showAuth(message) {
+        appScreen.classList.add('hidden');
+        authScreen.classList.remove('hidden');
+        if (message) showAuthNotice(message, true);
+    }
+
+    function logout(message) {
+        sessionStorage.removeItem(SESSION_KEY);
+        state.session = null;
+        state.messages = [];
+        state.selectedMessage = null;
+        showAuth(message);
+    }
+
+    function saveSession(session) {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+
+    function loadSession() {
+        try {
+            const raw = sessionStorage.getItem(SESSION_KEY);
+            if (!raw) return null;
+            const session = JSON.parse(raw);
+            if (!session.token) return null;
+            if (session.expiresAt && Date.now() > Number(session.expiresAt)) {
+                sessionStorage.removeItem(SESSION_KEY);
+                return null;
+            }
+            return session;
+        } catch (_) {
+            sessionStorage.removeItem(SESSION_KEY);
+            return null;
+        }
+    }
+
+    function formToObject(form) {
+        return Object.fromEntries(new FormData(form).entries());
+    }
+
+    function splitRecipients(raw) {
+        return String(raw || '').split(/[\n,]+/).map(value => value.trim()).filter(Boolean);
+    }
+
+    function normalizeMessages(messages, box) {
+        return Array.isArray(messages) ? messages.map(message => normalizeMessage(message, box)) : [];
+    }
+
+    function normalizeMessage(message, box) {
+        return {
+            id: message.id,
+            from: message.from || '',
+            to: Array.isArray(message.to) ? message.to : [],
+            subject: message.subject || '',
+            body: message.body || '',
+            attachments: Array.isArray(message.attachments) ? message.attachments : [],
+            read: Boolean(message.read),
+            createdAt: message.createdAt,
+            box: message.box || box,
+            archived: Boolean(message.archived || box === 'archive'),
+            deleted: Boolean(message.deleted || box === 'trash')
+        };
+    }
+
+    function subjectOf(message) { return message.subject && message.subject.trim() ? message.subject : '(No subject)'; }
+    function previewOf(message) { return String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 140) || 'No body preview'; }
+    function rowActor(message, view) { return view === 'sent' ? `To: ${(message.to || []).join(', ')}` : `From: ${message.from || 'Unknown'}`; }
+    function titleFor(view) { return ({ inbox: 'Inbox', sent: 'Sent', archive: 'Archive', trash: 'Trash' })[view] || 'Mailbox'; }
+    function endpointFor(view) { return ({ inbox: '/api/mail/inbox', sent: '/api/mail/sent', archive: '/api/mail/archive', trash: '/api/mail/trash' })[view]; }
+    function emptyCopy(view) { return ({ inbox: 'No inbox mail yet. Messages delivered to your mailbox will appear here.', sent: 'No sent mail yet.', archive: 'No archived mail.', trash: 'Trash is empty.' })[view] || 'No messages.'; }
+    function actionSuccessCopy(action) { return ({ read: 'Marked as read.', unread: 'Marked as unread.', archive: 'Archived.', unarchive: 'Unarchived.', trash: 'Moved to trash.', restore: 'Restored.' })[action] || 'Action complete.'; }
+    function formatTime(value) { return value ? new Date(Number(value)).toLocaleString() : ''; }
+    function formatSize(value) { return value ? `· ${Number(value).toLocaleString()} bytes` : ''; }
+
+    function setActiveNav(view) {
+        document.querySelectorAll('[data-view]').forEach(button => {
+            if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
+            else button.removeAttribute('aria-current');
+        });
+    }
+
+    function showAuthNotice(message, error) {
+        authNotice.textContent = message;
+        authNotice.classList.toggle('error', Boolean(error));
+        authNotice.classList.remove('hidden');
+    }
+
+    function hideAuthNotice() { authNotice.classList.add('hidden'); }
+    function showStatus(message, type) {
+        globalStatus.textContent = message;
+        globalStatus.className = `alert ${type || ''}`;
+        globalStatus.classList.remove('hidden');
+    }
+    function hideStatus() { globalStatus.classList.add('hidden'); }
+    function focusMain() { setTimeout(() => mainContent.focus(), 0); }
+
+    async function withDisabled(form, fn) {
+        const buttons = Array.from(form.querySelectorAll('button'));
+        buttons.forEach(button => { button.disabled = true; });
+        try { await fn(); } finally { buttons.forEach(button => { button.disabled = false; }); }
+    }
+
+    async function withButtonDisabled(button, fn) {
+        button.disabled = true;
+        try { await fn(); } finally { button.disabled = false; }
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    }
+
+    function escapeAttr(value) { return escapeHtml(value); }
+})();
+</script>
+</body>
+</html>

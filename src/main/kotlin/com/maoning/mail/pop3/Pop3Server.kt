@@ -12,8 +12,12 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.security.KeyStore
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
 
 class Pop3Server(
     private val config: AppConfig,
@@ -24,6 +28,7 @@ class Pop3Server(
     private val running = AtomicBoolean(false)
     @Volatile private var serverSocket: ServerSocket? = null
     private val pool = Executors.newFixedThreadPool(config.pop3MaxConnections + 1)
+    private val sslContext: SSLContext? = createSslContext()
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -54,48 +59,103 @@ class Pop3Server(
     }
 
     private fun handle(socket: Socket) {
-        socket.use {
-            val reader = BufferedReader(InputStreamReader(it.getInputStream(), Charsets.UTF_8))
-            val writer = PrintWriter(it.getOutputStream(), true)
-            var username: String? = null
-            var mailbox: String? = null
-            var messages: List<MailMessage> = emptyList()
+        var activeSocket = socket
+        var reader = BufferedReader(InputStreamReader(activeSocket.getInputStream(), Charsets.UTF_8))
+        var writer = PrintWriter(activeSocket.getOutputStream(), true)
+        var username: String? = null
+        var mailbox: String? = null
+        var tlsActive = false
+        var messages: List<MailMessage> = emptyList()
+        val deletedMessageIds = linkedSetOf<String>()
+
+        fun tlsRequired() = config.pop3RequireTlsForAuth && !tlsActive
+        fun messageAt(arg: String): MailMessage? {
+            val index = arg.toIntOrNull()?.minus(1) ?: return null
+            return messages.getOrNull(index)?.takeIf { it.id !in deletedMessageIds }
+        }
+        activeSocket.use {
             writer.ok("Kotlin POP3 ready")
             while (true) {
                 val line = reader.readLine() ?: break
                 val command = line.substringBefore(' ').uppercase()
                 val arg = line.substringAfter(' ', "").trim()
                 when (command) {
-                    "USER" -> { username = arg; writer.ok("user accepted") }
+                    "CAPA" -> {
+                        writer.ok("Capability list follows")
+                        writer.println("USER")
+                        writer.println("UIDL")
+                        if (sslContext != null && !tlsActive) writer.println("STLS")
+                        writer.println(".")
+                    }
+                    "STLS" -> {
+                        val context = sslContext
+                        if (context == null) {
+                            writer.err("TLS not available")
+                        } else if (tlsActive) {
+                            writer.err("TLS already active")
+                        } else {
+                            writer.ok("Begin TLS negotiation")
+                            val ssl = context.socketFactory.createSocket(activeSocket, activeSocket.inetAddress.hostAddress, activeSocket.port, false) as SSLSocket
+                            ssl.soTimeout = config.socketTimeoutMillis
+                            ssl.useClientMode = false
+                            ssl.startHandshake()
+                            activeSocket = ssl
+                            tlsActive = true
+                            reader = BufferedReader(InputStreamReader(activeSocket.getInputStream(), Charsets.UTF_8))
+                            writer = PrintWriter(activeSocket.getOutputStream(), true)
+                        }
+                    }
+                    "USER" -> {
+                        if (tlsRequired()) writer.err("TLS required before authentication") else { username = arg; writer.ok("user accepted") }
+                    }
                     "PASS" -> {
+                        if (tlsRequired()) {
+                            writer.err("TLS required before authentication")
+                            continue
+                        }
                         val user = username
                         if (user == null) writer.err("USER required first") else runCatching {
-                            mailbox = authService.login(user, arg, socket.inetAddress.hostAddress).mailbox
+                            mailbox = authService.login(user, arg, activeSocket.inetAddress.hostAddress).mailbox
                             messages = store.inbox(mailbox!!)
+                            deletedMessageIds.clear()
                             writer.ok("maildrop has ${messages.size} messages")
                         }.onFailure { writer.err("authentication failed") }
                     }
-                    "STAT" -> ifAuthenticated(writer, mailbox) { writer.ok("${messages.size} ${messages.sumOf { it.toRfc822().toByteArray().size }}") }
+                    "STAT" -> ifAuthenticated(writer, mailbox) {
+                        val activeMessages = messages.filter { it.id !in deletedMessageIds }
+                        writer.ok("${activeMessages.size} ${activeMessages.sumOf { it.toRfc822().toByteArray().size }}")
+                    }
                     "LIST" -> ifAuthenticated(writer, mailbox) {
                         if (arg.isBlank()) {
                             writer.ok("scan listing follows")
-                            messages.forEachIndexed { index, msg -> writer.println("${index + 1} ${msg.toRfc822().toByteArray().size}") }
+                            messages.forEachIndexed { index, msg -> if (msg.id !in deletedMessageIds) writer.println("${index + 1} ${msg.toRfc822().toByteArray().size}") }
                             writer.println(".")
                         } else {
-                            val msg = messages.getOrNull(arg.toIntOrNull()?.minus(1) ?: -1) ?: return@ifAuthenticated writer.err("no such message")
+                            val index = arg.toIntOrNull()?.minus(1) ?: -1
+                            val msg = messages.getOrNull(index)?.takeIf { it.id !in deletedMessageIds } ?: return@ifAuthenticated writer.err("no such message")
                             writer.ok("$arg ${msg.toRfc822().toByteArray().size}")
                         }
                     }
                     "RETR" -> ifAuthenticated(writer, mailbox) {
-                        val msg = messages.getOrNull(arg.toIntOrNull()?.minus(1) ?: -1) ?: return@ifAuthenticated writer.err("no such message")
+                        val msg = messageAt(arg) ?: return@ifAuthenticated writer.err("no such message")
+                        store.markRead(mailbox!!, msg.id, true)
                         writer.ok("message follows")
                         msg.toRfc822().lineSequence().forEach { bodyLine -> writer.println(if (bodyLine.startsWith('.')) ".$bodyLine" else bodyLine) }
                         writer.println(".")
                     }
                     "NOOP" -> writer.ok("OK")
-                    "RSET" -> writer.ok("OK")
-                    "DELE" -> writer.err("delete is not implemented; use web/admin retention policy")
-                    "QUIT" -> { writer.ok("bye"); break }
+                    "RSET" -> { deletedMessageIds.clear(); writer.ok("OK") }
+                    "DELE" -> ifAuthenticated(writer, mailbox) {
+                        val index = arg.toIntOrNull()?.minus(1) ?: -1
+                        val msg = messages.getOrNull(index)?.takeIf { it.id !in deletedMessageIds } ?: return@ifAuthenticated writer.err("no such message")
+                        deletedMessageIds += msg.id
+                        writer.ok("message ${index + 1} marked for deletion")
+                    }
+                    "QUIT" -> {
+                        mailbox?.let { owner -> deletedMessageIds.forEach { messageId -> store.setDeleted(owner, messageId, true) } }
+                        writer.ok("bye")
+                        break
+                    }
                     else -> writer.err("unknown command")
                 }
             }
@@ -104,6 +164,16 @@ class Pop3Server(
 
     private inline fun ifAuthenticated(writer: PrintWriter, mailbox: String?, block: () -> Unit) {
         if (mailbox == null) writer.err("authentication required") else block()
+    }
+
+    private fun createSslContext(): SSLContext? {
+        val path = config.tlsKeyStore ?: return null
+        val pass = config.tlsKeyStorePassword ?: return null
+        val ks = KeyStore.getInstance(KeyStore.getDefaultType())
+        java.io.FileInputStream(path).use { ks.load(it, pass.toCharArray()) }
+        val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
+        kmf.init(ks, pass.toCharArray())
+        return SSLContext.getInstance("TLS").apply { init(kmf.keyManagers, null, null) }
     }
 
     private fun MailMessage.toRfc822(): String = raw ?: buildString {

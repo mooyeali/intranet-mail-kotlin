@@ -23,4 +23,14 @@ class AppConfigTest {
         )
         assertFailsWith<IllegalArgumentException> { config.validateForRuntime() }
     }
+
+    @Test
+    fun rejectsMalformedAdminPasswordHashForRuntime() {
+        val config = AppConfig(
+            adminToken = "",
+            adminPasswordHash = "not-a-bcrypt-hash",
+            adminSessionSecret = "valid-admin-session-secret-32-chars"
+        )
+        assertFailsWith<IllegalArgumentException> { config.validateForRuntime() }
+    }
 }

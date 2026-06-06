@@ -64,6 +64,7 @@ class SmtpServer(
     private fun handle(socket: Socket) {
         var activeSocket = socket
         var authenticatedMailbox: String? = null
+        var tlsActive = false
         var from: String? = null
         val recipients = mutableListOf<String>()
 
@@ -80,8 +81,8 @@ class SmtpServer(
                     upper.startsWith("HELO") -> writer.reply(250, serverName)
                     upper.startsWith("EHLO") -> {
                         writer.println("250-$serverName")
-                        writer.println("250-AUTH PLAIN LOGIN")
-                        if (sslContext != null) writer.println("250-STARTTLS")
+                        if (!config.smtpRequireTlsForAuth || tlsActive) writer.println("250-AUTH PLAIN LOGIN")
+                        if (sslContext != null && !tlsActive) writer.println("250-STARTTLS")
                         writer.println("250 SIZE ${config.maxMessageBytes}")
                     }
                     upper == "STARTTLS" -> {
@@ -94,18 +95,27 @@ class SmtpServer(
                             ssl.useClientMode = false
                             ssl.startHandshake()
                             activeSocket = ssl
+                            tlsActive = true
                             val newStreams = streams()
                             reader = newStreams.first
                             writer = newStreams.second
                         }
                     }
                     upper.startsWith("AUTH PLAIN") -> {
+                        if (config.smtpRequireTlsForAuth && !tlsActive) {
+                            writer.reply(538, "Encryption required for requested authentication mechanism")
+                            continue
+                        }
                         val payload = line.substringAfter("AUTH PLAIN", "").trim().ifBlank {
                             writer.print("334 "); writer.println(); reader.readLine()
                         }
                         authenticatedMailbox = authPlain(payload, writer, activeSocket.inetAddress.hostAddress)
                     }
                     upper.startsWith("AUTH LOGIN") -> {
+                        if (config.smtpRequireTlsForAuth && !tlsActive) {
+                            writer.reply(538, "Encryption required for requested authentication mechanism")
+                            continue
+                        }
                         authenticatedMailbox = authLogin(reader, writer, activeSocket.inetAddress.hostAddress)
                     }
                     upper == "NOOP" -> writer.reply(250, "OK")
@@ -131,6 +141,10 @@ class SmtpServer(
                         val rcpt = store.normalizeMailbox(extractAddress(line))
                         if (!store.userExists(rcpt)) {
                             writer.reply(550, "No such user: $rcpt")
+                            continue
+                        }
+                        if (recipients.size >= config.maxRecipients) {
+                            writer.reply(452, "Too many recipients; max ${config.maxRecipients}")
                             continue
                         }
                         recipients += rcpt
